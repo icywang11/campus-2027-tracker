@@ -4,6 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react"
 
 import { jobs } from "@/data/jobs"
 import {
+  ACTIVE_STATUSES,
   defaultRecord,
   type ApplicationRecord,
   type FlagId,
@@ -164,14 +165,7 @@ export function useApplicationStore() {
     return {
       applied: all.filter((item) => item.status === "applied").length,
       inProcess: all.filter((item) =>
-        [
-          "applied",
-          "assessment",
-          "assessed",
-          "written",
-          "interview",
-          "waiting",
-        ].includes(item.status)
+        ACTIVE_STATUSES.includes(item.status)
       ).length,
       offer: all.filter((item) => item.status === "offer").length,
       closed: all.filter((item) =>

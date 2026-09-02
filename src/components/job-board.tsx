@@ -2,119 +2,101 @@
 
 import { useMemo, useRef, useState } from "react"
 import {
-  ArrowUpRight,
-  Briefcase,
+  ChevronDown,
   ChevronRight,
   Download,
   Filter,
-  MapPin,
   RotateCcw,
   Search,
-  Sparkles,
   Upload,
 } from "lucide-react"
 
+import { JobDetailPanel, statusLabel, statusTone } from "@/components/job-detail-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { profile } from "@/data/profile"
 import {
+  COMPANIES,
+  DIRECTIONS,
   INDUSTRIES,
   LOCATIONS,
+  isUrgent,
   jobs,
+  matchStars,
+  type Direction,
   type Industry,
   type Job,
-  type MatchLevel,
 } from "@/data/jobs"
 import {
-  FLAGS,
+  ACTIVE_STATUSES,
   STATUSES,
   type ApplicationRecord,
-  type FlagId,
   type StatusId,
 } from "@/data/status"
 import { useApplicationStore } from "@/lib/use-application-store"
 import { cn } from "@/lib/utils"
 
-const ACTIVE_STATUSES: StatusId[] = [
-  "applied",
-  "assessment",
-  "assessed",
-  "written",
-  "interview",
-  "waiting",
-]
+type StatusFilter = StatusId | "all" | "active" | "prep"
 
-function statusTone(id: StatusId) {
-  switch (id) {
-    case "todo":
-      return "border-border bg-background text-muted-foreground"
-    case "applied":
-      return "border-sky-300 bg-sky-50 text-sky-800"
-    case "assessment":
-      return "border-violet-300 bg-violet-50 text-violet-800"
-    case "assessed":
-      return "border-teal-300 bg-teal-50 text-teal-800"
-    case "written":
-      return "border-indigo-300 bg-indigo-50 text-indigo-800"
-    case "interview":
-      return "border-amber-300 bg-amber-50 text-amber-900"
-    case "waiting":
-      return "border-orange-300 bg-orange-50 text-orange-900"
-    case "offer":
-      return "border-emerald-300 bg-emerald-50 text-emerald-800"
-    case "rejected":
-      return "border-rose-300 bg-rose-50 text-rose-800"
-    case "dropped":
-      return "border-stone-300 bg-stone-100 text-stone-600"
-    default:
-      return "border-border bg-muted text-muted-foreground"
-  }
+type CompanyGroup = {
+  name: string
+  jobs: Job[]
+  maxScore: number
+  activeCount: number
 }
 
-function statusLabel(id: StatusId) {
-  return STATUSES.find((item) => item.id === id)?.label ?? id
-}
-
-function StatusChips({
+function FilterSelect({
+  label,
   value,
   onChange,
+  options,
 }: {
-  value: StatusId
-  onChange: (status: StatusId) => void
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="当前进度">
-      {STATUSES.map((status) => {
-        const checked = value === status.id
-        return (
-          <button
-            key={status.id}
-            type="button"
-            role="radio"
-            aria-checked={checked}
-            onClick={() => onChange(status.id)}
-            className={cn(
-              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-              checked
-                ? statusTone(status.id)
-                : "border-border bg-background text-muted-foreground hover:bg-muted"
-            )}
-          >
-            <span
-              className={cn(
-                "grid size-3.5 place-items-center rounded-[3px] border border-current/40",
-                checked && "bg-current/90"
-              )}
-            >
-              {checked ? (
-                <span className="block size-1.5 rounded-[1px] bg-background" />
-              ) : null}
-            </span>
-            {status.label}
-          </button>
-        )
-      })}
+    <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="max-w-36 bg-transparent font-medium outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: number
+  hint: string
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3">
+      <p className="text-xs tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="font-heading mt-1 text-3xl tabular-nums">{value}</p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   )
 }
@@ -122,23 +104,26 @@ function StatusChips({
 export function JobBoard() {
   const store = useApplicationStore()
   const fileRef = useRef<HTMLInputElement>(null)
-  const detailRef = useRef<HTMLElement>(null)
   const [query, setQuery] = useState("")
+  const [company, setCompany] = useState("all")
   const [industry, setIndustry] = useState<Industry | "all">("all")
   const [location, setLocation] = useState("all")
-  const [match, setMatch] = useState<MatchLevel | "all">("all")
-  const [statusFilter, setStatusFilter] = useState<StatusId | "all" | "active">(
-    "all"
-  )
+  const [direction, setDirection] = useState<Direction | "all">("all")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [matchFloor, setMatchFloor] = useState<"all" | "90" | "80" | "70">("all")
+  const [onlyDirect, setOnlyDirect] = useState(false)
   const [onlyPriority, setOnlyPriority] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const filtered = useMemo(() => {
     const rank = (job: Job) => {
       const status = store.get(job.id).status
       if (ACTIVE_STATUSES.includes(status) || status === "offer") return 0
       if (job.seed) return 1
-      if (job.match === "high") return 2
+      if (job.matchScore >= 88) return 2
       return 3
     }
     return jobs
@@ -146,34 +131,78 @@ export function JobBoard() {
         const record = store.get(job.id)
         const haystack = [
           job.company,
+          job.companyGroup,
           job.role,
           job.industry,
           ...job.locations,
+          ...job.tags,
           ...job.matchReasons,
         ]
           .join(" ")
           .toLowerCase()
         if (query && !haystack.includes(query.trim().toLowerCase())) return false
+        if (company !== "all" && job.companyGroup !== company) return false
         if (industry !== "all" && job.industry !== industry) return false
         if (location !== "all" && !job.locations.includes(location)) return false
-        if (match !== "all" && job.match !== match) return false
+        if (direction !== "all" && !job.tags.includes(direction)) return false
         if (statusFilter === "active" && !ACTIVE_STATUSES.includes(record.status))
+          return false
+        if (statusFilter === "prep" && !["todo", "viewed", "ready"].includes(record.status))
           return false
         if (
           statusFilter !== "all" &&
           statusFilter !== "active" &&
+          statusFilter !== "prep" &&
           record.status !== statusFilter
         )
           return false
+        if (matchFloor !== "all" && job.matchScore < Number(matchFloor)) return false
+        if (onlyDirect && job.applyKind !== "direct") return false
         if (onlyPriority && !record.flags.includes("priority")) return false
         return true
       })
       .sort((a, b) => {
         const diff = rank(a) - rank(b)
         if (diff !== 0) return diff
+        if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore
         return a.company.localeCompare(b.company, "zh")
       })
-  }, [industry, location, match, onlyPriority, query, statusFilter, store])
+  }, [
+    company,
+    direction,
+    industry,
+    location,
+    matchFloor,
+    onlyDirect,
+    onlyPriority,
+    query,
+    statusFilter,
+    store,
+  ])
+
+  const groups = useMemo<CompanyGroup[]>(() => {
+    const map = new Map<string, Job[]>()
+    for (const job of filtered) {
+      const list = map.get(job.companyGroup) ?? []
+      list.push(job)
+      map.set(job.companyGroup, list)
+    }
+    return [...map.entries()]
+      .map(([name, groupJobs]) => ({
+        name,
+        jobs: groupJobs,
+        maxScore: Math.max(...groupJobs.map((job) => job.matchScore)),
+        activeCount: groupJobs.filter((job) => {
+          const status = store.get(job.id).status
+          return ACTIVE_STATUSES.includes(status) || status === "offer"
+        }).length,
+      }))
+      .sort((a, b) => {
+        if (b.activeCount !== a.activeCount) return b.activeCount - a.activeCount
+        if (b.maxScore !== a.maxScore) return b.maxScore - a.maxScore
+        return a.name.localeCompare(b.name, "zh")
+      })
+  }, [filtered, store])
 
   const activeId =
     selectedId && filtered.some((job) => job.id === selectedId)
@@ -181,15 +210,55 @@ export function JobBoard() {
       : (filtered[0]?.id ?? null)
   const selected = filtered.find((job) => job.id === activeId) ?? null
   const selectedRecord = selected ? store.get(selected.id) : undefined
+  const selectedGroup = selected?.companyGroup
 
-  function openJob(id: string) {
-    setSelectedId(id)
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      window.setTimeout(() => {
-        detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-      }, 50)
+  function isGroupOpen(name: string) {
+    if (collapsed.has(name)) return false
+    if (expanded.has(name)) return true
+    const group = groups.find((item) => item.name === name)
+    return name === selectedGroup || (group?.activeCount ?? 0) > 0
+  }
+
+  function toggleGroup(name: string) {
+    if (isGroupOpen(name)) {
+      setCollapsed((current) => new Set(current).add(name))
+      setExpanded((current) => {
+        const next = new Set(current)
+        next.delete(name)
+        return next
+      })
+    } else {
+      setExpanded((current) => new Set(current).add(name))
+      setCollapsed((current) => {
+        const next = new Set(current)
+        next.delete(name)
+        return next
+      })
     }
   }
+
+  function openJob(id: string) {
+    const job = jobs.find((item) => item.id === id)
+    setSelectedId(id)
+    if (job) {
+      setExpanded((current) => new Set(current).add(job.companyGroup))
+      setCollapsed((current) => {
+        const next = new Set(current)
+        next.delete(job.companyGroup)
+        return next
+      })
+    }
+    if (store.get(id).status === "todo") {
+      store.setStatus(id, "viewed")
+    }
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setMobileOpen(true)
+    }
+  }
+
+  const readyCount = jobs.filter((job) =>
+    ["todo", "viewed", "ready"].includes(store.get(job.id).status)
+  ).length
 
   return (
     <div className="min-h-full bg-background">
@@ -198,13 +267,13 @@ export function JobBoard() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="font-heading text-[11px] tracking-[0.28em] text-muted-foreground uppercase">
-                2027 届校招目录 · {profile.englishName}
+                2027 届求职台账 · {profile.englishName}
               </p>
               <h1 className="font-heading mt-2 text-3xl leading-tight sm:text-4xl">
-                {profile.name}的投递台账
+                {profile.name}的投递管理
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-                左侧目录勾进度，点进一条看 JD 和投递链接。已投的腾讯、灵犀、阿里国际、米哈游会排在前面。
+                按公司看岗，先改简历再投。有独立 JD 的才能「立即投递」；其余去官网搜岗位名。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -215,7 +284,6 @@ export function JobBoard() {
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
               >
                 个人主页
-                <ArrowUpRight />
               </a>
               <Button variant="outline" size="sm" onClick={store.exportJson}>
                 <Download />
@@ -256,18 +324,22 @@ export function JobBoard() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="目录" value={jobs.length} hint={`${filtered.length} 条在筛`} />
+            <StatCard
+              label="岗位池"
+              value={jobs.length}
+              hint={`${COMPANIES.length} 家公司 · ${filtered.length} 条在筛`}
+            />
+            <StatCard
+              label="待处理"
+              value={readyCount}
+              hint="待查看 / 已查看 / 准备投递"
+            />
             <StatCard
               label="进行中"
               value={store.counts.inProcess}
-              hint="投递 / 测评 / 面试 / 等结果"
+              hint="已投到等结果"
             />
-            <StatCard label="已拿 Offer" value={store.counts.offer} hint="意向书也算" />
-            <StatCard
-              label="已结束"
-              value={store.counts.closed}
-              hint="拒绝或主动放弃"
-            />
+            <StatCard label="Offer" value={store.counts.offer} hint="意向书也算" />
           </div>
         </div>
       </header>
@@ -280,11 +352,38 @@ export function JobBoard() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜公司、岗位、城市"
+                placeholder="搜公司、岗位、方向、城市"
                 className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent py-1 pr-2.5 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               />
             </div>
             <div className="flex flex-wrap gap-2">
+              <FilterSelect
+                label="公司"
+                value={company}
+                onChange={setCompany}
+                options={[
+                  { value: "all", label: "全部公司" },
+                  ...COMPANIES.map((item) => ({ value: item, label: item })),
+                ]}
+              />
+              <FilterSelect
+                label="地点"
+                value={location}
+                onChange={setLocation}
+                options={[
+                  { value: "all", label: "全部地点" },
+                  ...LOCATIONS.map((item) => ({ value: item, label: item })),
+                ]}
+              />
+              <FilterSelect
+                label="方向"
+                value={direction}
+                onChange={(value) => setDirection(value as Direction | "all")}
+                options={[
+                  { value: "all", label: "全部方向" },
+                  ...DIRECTIONS.map((item) => ({ value: item, label: item })),
+                ]}
+              />
               <FilterSelect
                 label="行业"
                 value={industry}
@@ -295,32 +394,12 @@ export function JobBoard() {
                 ]}
               />
               <FilterSelect
-                label="城市"
-                value={location}
-                onChange={setLocation}
-                options={[
-                  { value: "all", label: "全部地点" },
-                  ...LOCATIONS.map((item) => ({ value: item, label: item })),
-                ]}
-              />
-              <FilterSelect
-                label="匹配"
-                value={match}
-                onChange={(value) => setMatch(value as MatchLevel | "all")}
-                options={[
-                  { value: "all", label: "全部匹配" },
-                  { value: "high", label: "高匹配" },
-                  { value: "medium", label: "可投" },
-                ]}
-              />
-              <FilterSelect
-                label="进度"
+                label="状态"
                 value={statusFilter}
-                onChange={(value) =>
-                  setStatusFilter(value as StatusId | "all" | "active")
-                }
+                onChange={(value) => setStatusFilter(value as StatusFilter)}
                 options={[
-                  { value: "all", label: "全部进度" },
+                  { value: "all", label: "全部状态" },
+                  { value: "prep", label: "还没投" },
                   { value: "active", label: "进行中" },
                   ...STATUSES.map((item) => ({
                     value: item.id,
@@ -328,6 +407,28 @@ export function JobBoard() {
                   })),
                 ]}
               />
+              <FilterSelect
+                label="匹配"
+                value={matchFloor}
+                onChange={(value) =>
+                  setMatchFloor(value as "all" | "90" | "80" | "70")
+                }
+                options={[
+                  { value: "all", label: "全部匹配" },
+                  { value: "90", label: "90%+" },
+                  { value: "80", label: "80%+" },
+                  { value: "70", label: "70%+" },
+                ]}
+              />
+              <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-xs">
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-current"
+                  checked={onlyDirect}
+                  onChange={(event) => setOnlyDirect(event.target.checked)}
+                />
+                可直接投递
+              </label>
               <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-xs">
                 <input
                   type="checkbox"
@@ -341,44 +442,75 @@ export function JobBoard() {
           </div>
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Filter className="size-3.5" />
-            目录 {filtered.length} / {jobs.length}
+            {groups.length} 家公司 · {filtered.length} 个岗位
             {query ? ` · 含「${query}」` : ""}
           </p>
         </section>
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]">
           <div className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="border-b border-border px-4 py-3">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                岗位目录
+                公司目录
               </p>
             </div>
-            {filtered.length === 0 ? (
+            {groups.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                 没有符合筛选的岗位
               </p>
             ) : (
-              <ul className="divide-y divide-border">
-                {filtered.map((job) => (
-                  <DirectoryRow
-                    key={job.id}
-                    job={job}
-                    record={store.get(job.id)}
-                    selected={job.id === activeId}
-                    onSelect={() => openJob(job.id)}
-                    onStatus={(status) => store.setStatus(job.id, status)}
-                  />
-                ))}
+              <ul>
+                {groups.map((group) => {
+                  const open = isGroupOpen(group.name)
+                  return (
+                    <li key={group.name} className="border-b border-border last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.name)}
+                        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-muted/40"
+                      >
+                        {open ? (
+                          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="font-heading min-w-0 flex-1 truncate text-base">
+                          {group.name}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {group.jobs.length} 岗
+                        </span>
+                        <span className="font-heading text-xs tabular-nums">
+                          {group.maxScore}%
+                        </span>
+                        {group.activeCount > 0 ? (
+                          <Badge variant="secondary">{group.activeCount} 进行中</Badge>
+                        ) : null}
+                      </button>
+                      {open ? (
+                        <ul className="border-t border-border bg-muted/20">
+                          {group.jobs.map((job) => (
+                            <JobRow
+                              key={job.id}
+                              job={job}
+                              record={store.get(job.id)}
+                              selected={job.id === activeId}
+                              onSelect={() => openJob(job.id)}
+                              onStatus={(status) => store.setStatus(job.id, status)}
+                            />
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
 
-          <section
-            ref={detailRef}
-            className="min-h-80 rounded-2xl border border-border bg-card p-4 sm:p-5"
-          >
+          <section className="hidden min-h-80 rounded-2xl border border-border bg-card p-4 sm:p-5 lg:block">
             {selected && selectedRecord ? (
-              <JobDetail
+              <JobDetailPanel
                 job={selected}
                 record={selectedRecord}
                 onStatus={(status) => store.setStatus(selected.id, status)}
@@ -387,67 +519,38 @@ export function JobBoard() {
               />
             ) : (
               <p className="py-16 text-center text-sm text-muted-foreground">
-                从左边点一条，看 JD 和投递链接。
+                展开公司，点一个岗位看匹配度和改简历建议。
               </p>
             )}
           </section>
         </div>
       </main>
+
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+          {selected && selectedRecord ? (
+            <>
+              <SheetHeader>
+                <SheetTitle>{selected.role}</SheetTitle>
+              </SheetHeader>
+              <div className="px-4 pb-8">
+                <JobDetailPanel
+                  job={selected}
+                  record={selectedRecord}
+                  onStatus={(status) => store.setStatus(selected.id, status)}
+                  onFlag={(flag) => store.toggleFlag(selected.id, flag)}
+                  onNote={(note) => store.setNote(selected.id, note)}
+                />
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
 
-function StatCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string
-  value: number
-  hint: string
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3">
-      <p className="text-xs tracking-wide text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p className="font-heading mt-1 text-3xl tabular-nums">{value}</p>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
-  )
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  options: { value: string; label: string }[]
-}) {
-  return (
-    <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="max-w-32 bg-transparent font-medium outline-none"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
-function DirectoryRow({
+function JobRow({
   job,
   record,
   selected,
@@ -463,21 +566,15 @@ function DirectoryRow({
   return (
     <li
       className={cn(
-        "flex items-start gap-2 px-3 py-3",
-        selected && "bg-muted/70"
+        "flex items-start gap-2 px-3 py-2.5 pl-9",
+        selected && "bg-card"
       )}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        className="min-w-0 flex-1 text-left"
-      >
-        <p className="flex items-center gap-1.5 text-sm font-medium">
-          <span className="truncate">{job.company}</span>
-          {selected ? <ChevronRight className="size-3.5 shrink-0" /> : null}
-        </p>
+      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <p className="truncate text-sm font-medium">{job.role}</p>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {job.role}
+          {job.locations.slice(0, 3).join(" / ")}
+          {job.locations.length > 3 ? " 等" : ""}
         </p>
         <p className="mt-1 flex flex-wrap gap-1">
           <span
@@ -488,15 +585,29 @@ function DirectoryRow({
           >
             {statusLabel(record.status)}
           </span>
-          <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {job.industry}
+          <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] tabular-nums">
+            {matchStars(job.matchScore)} {job.matchScore}%
           </span>
+          {job.tags.includes("日本") ? (
+            <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px]">
+              日本
+            </span>
+          ) : null}
+          {job.tags.includes("海外") ? (
+            <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px]">
+              海外
+            </span>
+          ) : null}
+          {isUrgent(job) ? (
+            <span className="rounded-full border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-900">
+              高匹配
+            </span>
+          ) : null}
         </p>
       </button>
-      <label className="shrink-0 pt-0.5">
-        <span className="sr-only">进度</span>
+      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
         <select
-          aria-label={`${job.company}进度`}
+          aria-label={`${job.role}进度`}
           value={record.status}
           onChange={(event) => onStatus(event.target.value as StatusId)}
           onClick={(event) => event.stopPropagation()}
@@ -508,135 +619,18 @@ function DirectoryRow({
             </option>
           ))}
         </select>
-      </label>
-    </li>
-  )
-}
-
-function JobDetail({
-  job,
-  record,
-  onStatus,
-  onFlag,
-  onNote,
-}: {
-  job: Job
-  record: ApplicationRecord
-  onStatus: (status: StatusId) => void
-  onFlag: (flag: FlagId) => void
-  onNote: (note: string) => void
-}) {
-  return (
-    <div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="font-heading text-2xl">{job.company}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {job.role} · {job.industry}
-          </p>
-          <p className="mt-1 inline-flex items-center gap-1 text-sm">
-            <MapPin className="size-3.5" />
-            {job.locations.join(" / ")}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+        {job.applyKind === "direct" ? (
           <a
             href={job.applyUrl}
             target="_blank"
             rel="noreferrer"
-            className={cn(buttonVariants({ size: "sm" }))}
+            onClick={(event) => event.stopPropagation()}
+            className="text-[10px] text-primary underline-offset-2 hover:underline"
           >
-            打开投递链接
-            <ArrowUpRight />
+            投递
           </a>
-          <a
-            href={job.officialSite}
-            target="_blank"
-            rel="noreferrer"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-          >
-            校招官网
-          </a>
-        </div>
+        ) : null}
       </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Badge>{job.match === "high" ? "高匹配" : "可投"}</Badge>
-        <Badge variant="outline">{job.track}</Badge>
-        <Badge variant="outline">{job.batch}</Badge>
-      </div>
-
-      <div className="mt-5">
-        <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          当前进度（单选）
-        </p>
-        <StatusChips value={record.status} onChange={onStatus} />
-        <div className="mt-3 flex flex-wrap gap-3">
-          {FLAGS.map((flag) => (
-            <label key={flag.id} className="inline-flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                className="size-3.5 accent-current"
-                checked={record.flags.includes(flag.id)}
-                onChange={() => onFlag(flag.id)}
-              />
-              {flag.label}
-            </label>
-          ))}
-        </div>
-        <Textarea
-          value={record.note}
-          onChange={(event) => onNote(event.target.value)}
-          placeholder="进度备注：内推人、测评截止日期、面试轮次…"
-          className="mt-3 min-h-16 resize-y"
-        />
-      </div>
-
-      <section className="mt-6">
-        <h3 className="flex items-center gap-2 text-sm font-medium">
-          <Sparkles className="size-4" />
-          为什么适配你
-        </h3>
-        <ul className="mt-2 space-y-1.5 text-sm leading-6">
-          {job.matchReasons.map((item) => (
-            <li key={item}>· {item}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="mt-4">
-        <h3 className="flex items-center gap-2 text-sm font-medium">
-          <Briefcase className="size-4" />
-          职位职责
-        </h3>
-        <ul className="mt-2 space-y-1.5 text-sm leading-6">
-          {job.responsibilities.map((item) => (
-            <li key={item}>· {item}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="mt-4">
-        <h3 className="text-sm font-medium">任职要求</h3>
-        <ul className="mt-2 space-y-1.5 text-sm leading-6">
-          {job.requirements.map((item) => (
-            <li key={item}>· {item}</li>
-          ))}
-        </ul>
-      </section>
-
-      {job.plus?.length ? (
-        <section className="mt-4">
-          <h3 className="text-sm font-medium">加分项</h3>
-          <p className="mt-2 text-sm leading-6">{job.plus.join(" · ")}</p>
-        </section>
-      ) : null}
-
-      {job.caveat ? (
-        <p className="mt-4 rounded-xl bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-          {job.caveat}
-        </p>
-      ) : null}
-    </div>
+    </li>
   )
 }

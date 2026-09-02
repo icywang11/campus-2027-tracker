@@ -1,42 +1,30 @@
-export const INDUSTRIES = [
-  "游戏",
-  "短视频 / 直播",
-  "内容社区",
-  "跨境电商",
-  "本地生活",
-  "消费电子",
-  "搜索 / AI",
-] as const
+import { extraJobs } from "./jobs-extra"
+import {
+  finalizeJob,
+  type JobInput,
+} from "./job-model"
 
-export type Industry = (typeof INDUSTRIES)[number]
-export type MatchLevel = "high" | "medium"
-export type Track = "正式校招" | "校招储备实习" | "管培 / 专项"
+export type {
+  ApplyKind,
+  Direction,
+  Industry,
+  Job,
+  JobTag,
+  MatchBreakdown,
+  MatchLevel,
+  ResumeChanges,
+  Track,
+} from "./job-model"
+export {
+  DIRECTIONS,
+  INDUSTRIES,
+  JOB_TAGS,
+  inferCompanyGroup,
+  isUrgent,
+  matchStars,
+} from "./job-model"
 
-export type Job = {
-  id: string
-  company: string
-  industry: Industry
-  role: string
-  track: Track
-  locations: string[]
-  applyUrl: string
-  officialSite: string
-  match: MatchLevel
-  matchReasons: string[]
-  responsibilities: string[]
-  requirements: string[]
-  plus?: string[]
-  batch: string
-  deadline?: string
-  caveat?: string
-  seed?: {
-    status: import("./status").StatusId
-    note?: string
-    flags?: import("./status").FlagId[]
-  }
-}
-
-export const jobs: Job[] = [
+const rawJobs: JobInput[] = [
   {
     id: "netease-hy-overseas-ops",
     company: "网易游戏（互娱）",
@@ -810,7 +798,12 @@ export const jobs: Job[] = [
   },
 ]
 
-export const COMPANIES = Array.from(new Set(jobs.map((job) => job.company)))
+export const jobs = [...rawJobs, ...extraJobs].map(finalizeJob)
+
+export const COMPANIES = Array.from(
+  new Set(jobs.map((job) => job.companyGroup))
+).sort((a, b) => a.localeCompare(b, "zh"))
+
 export const LOCATIONS = Array.from(
   new Set(jobs.flatMap((job) => job.locations))
-).sort()
+).sort((a, b) => a.localeCompare(b, "zh"))
