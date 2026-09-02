@@ -24,3 +24,9 @@ npm run dev
 ```
 
 浏览器打开 [http://127.0.0.1:43217](http://127.0.0.1:43217)。
+
+更新在线页面：
+
+```bash
+bash scripts/deploy-pages.sh
+```
