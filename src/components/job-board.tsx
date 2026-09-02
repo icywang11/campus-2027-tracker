@@ -15,16 +15,7 @@ import {
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { profile } from "@/data/profile"
 import {
@@ -76,6 +67,49 @@ function statusTone(id: StatusId) {
     default:
       return "border-border bg-muted text-muted-foreground"
   }
+}
+
+function StatusChips({
+  value,
+  onChange,
+}: {
+  value: StatusId
+  onChange: (status: StatusId) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="当前进度">
+      {STATUSES.map((status) => {
+        const checked = value === status.id
+        return (
+          <button
+            key={status.id}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            onClick={() => onChange(status.id)}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+              checked
+                ? statusTone(status.id)
+                : "border-border bg-background text-muted-foreground hover:bg-muted"
+            )}
+          >
+            <span
+              className={cn(
+                "grid size-3.5 place-items-center rounded-[3px] border border-current/40",
+                checked && "bg-current/90"
+              )}
+            >
+              {checked ? (
+                <span className="block size-1.5 rounded-[1px] bg-background" />
+              ) : null}
+            </span>
+            {status.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 export function JobBoard() {
@@ -145,17 +179,15 @@ export function JobBoard() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <a href={profile.portfolio} target="_blank" rel="noreferrer" />
-                }
+              <a
+                href={profile.portfolio}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
               >
                 个人主页
                 <ArrowUpRight />
-              </Button>
+              </a>
               <Button variant="outline" size="sm" onClick={store.exportJson}>
                 <Download />
                 导出进度
@@ -247,11 +279,11 @@ export function JobBoard() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <div className="relative grow">
                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
+                <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="搜公司、岗位、城市、匹配理由"
-                  className="pl-9"
+                  className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent py-1 pr-2.5 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -299,9 +331,11 @@ export function JobBoard() {
                   ]}
                 />
                 <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-xs">
-                  <Checkbox
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-current"
                     checked={onlyPriority}
-                    onCheckedChange={(checked) => setOnlyPriority(Boolean(checked))}
+                    onChange={(event) => setOnlyPriority(event.target.checked)}
                   />
                   只看优先冲
                 </label>
@@ -445,15 +479,15 @@ function JobCard({
           <Button size="sm" onClick={onOpen}>
             看 JD
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<a href={job.applyUrl} target="_blank" rel="noreferrer" />}
+          <a
+            href={job.applyUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
           >
             去投递
             <ArrowUpRight />
-          </Button>
+          </a>
         </div>
       </div>
 
@@ -461,39 +495,18 @@ function JobCard({
         <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           当前进度（单选）
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {STATUSES.map((status) => {
-            const checked = record.status === status.id
-            return (
-              <label
-                key={status.id}
-                className={cn(
-                  "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  checked
-                    ? statusTone(status.id)
-                    : "border-border bg-background text-muted-foreground hover:bg-muted"
-                )}
-              >
-                <input
-                  type="checkbox"
-                  className="size-3.5 accent-current"
-                  checked={checked}
-                  onChange={() => onStatus(status.id)}
-                />
-                {status.label}
-              </label>
-            )
-          })}
-        </div>
+        <StatusChips value={record.status} onChange={onStatus} />
         <p className="mt-3 mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           额外标记（可多选）
         </p>
         <div className="flex flex-wrap gap-3">
           {FLAGS.map((flag) => (
             <label key={flag.id} className="inline-flex items-center gap-2 text-xs">
-              <Checkbox
+              <input
+                type="checkbox"
+                className="size-3.5 accent-current"
                 checked={record.flags.includes(flag.id)}
-                onCheckedChange={() => onFlag(flag.id)}
+                onChange={() => onFlag(flag.id)}
               />
               {flag.label}
             </label>
@@ -525,135 +538,132 @@ function JobDialog({
   onFlag: (flag: FlagId) => void
   onNote: (note: string) => void
 }) {
+  if (!job || !record) return null
+
   return (
-    <Dialog open={Boolean(job)} onOpenChange={(open) => !open && onClose()}>
-      {job && record ? (
-        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-heading pr-8 text-2xl">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="job-dialog-title"
+        className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="job-dialog-title" className="font-heading text-2xl">
               {job.company}
-            </DialogTitle>
-            <DialogDescription>
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               {job.role} · {job.industry} · {job.locations.join(" / ")}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-wrap gap-2">
-            <Badge>{job.match === "high" ? "高匹配" : "可投"}</Badge>
-            <Badge variant="outline">{job.track}</Badge>
-            <Badge variant="outline">{job.batch}</Badge>
-          </div>
-
-          <section>
-            <h3 className="flex items-center gap-2 text-sm font-medium">
-              <Sparkles className="size-4" />
-              为什么适配你
-            </h3>
-            <ul className="mt-2 space-y-1.5 text-sm leading-6">
-              {job.matchReasons.map((item) => (
-                <li key={item}>· {item}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-medium">职位职责</h3>
-            <ul className="mt-2 space-y-1.5 text-sm leading-6 text-foreground/90">
-              {job.responsibilities.map((item) => (
-                <li key={item}>· {item}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-medium">任职要求</h3>
-            <ul className="mt-2 space-y-1.5 text-sm leading-6 text-foreground/90">
-              {job.requirements.map((item) => (
-                <li key={item}>· {item}</li>
-              ))}
-            </ul>
-          </section>
-
-          {job.plus?.length ? (
-            <section>
-              <h3 className="text-sm font-medium">加分项</h3>
-              <p className="mt-2 text-sm leading-6">{job.plus.join(" · ")}</p>
-            </section>
-          ) : null}
-
-          {job.caveat ? (
-            <p className="rounded-xl bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-              {job.caveat}
             </p>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              nativeButton={false}
-              render={<a href={job.applyUrl} target="_blank" rel="noreferrer" />}
-            >
-              打开投递链接
-              <ArrowUpRight />
-            </Button>
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={
-                <a href={job.officialSite} target="_blank" rel="noreferrer" />
-              }
-            >
-              校招官网
-            </Button>
           </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            关闭
+          </Button>
+        </div>
 
-          <div className="border-t border-border pt-4">
-            <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              当前进度
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUSES.map((status) => (
-                <label
-                  key={status.id}
-                  className={cn(
-                    "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
-                    record.status === status.id
-                      ? statusTone(status.id)
-                      : "border-border bg-background text-muted-foreground"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="size-3.5 accent-current"
-                    checked={record.status === status.id}
-                    onChange={() => onStatus(status.id)}
-                  />
-                  {status.label}
-                </label>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-3">
-              {FLAGS.map((flag) => (
-                <label
-                  key={flag.id}
-                  className="inline-flex items-center gap-2 text-xs"
-                >
-                  <Checkbox
-                    checked={record.flags.includes(flag.id)}
-                    onCheckedChange={() => onFlag(flag.id)}
-                  />
-                  {flag.label}
-                </label>
-              ))}
-            </div>
-            <Textarea
-              value={record.note}
-              onChange={(event) => onNote(event.target.value)}
-              placeholder="进度备注"
-              className="mt-3 min-h-16"
-            />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Badge>{job.match === "high" ? "高匹配" : "可投"}</Badge>
+          <Badge variant="outline">{job.track}</Badge>
+          <Badge variant="outline">{job.batch}</Badge>
+        </div>
+
+        <section className="mt-4">
+          <h3 className="flex items-center gap-2 text-sm font-medium">
+            <Sparkles className="size-4" />
+            为什么适配你
+          </h3>
+          <ul className="mt-2 space-y-1.5 text-sm leading-6">
+            {job.matchReasons.map((item) => (
+              <li key={item}>· {item}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="mt-4">
+          <h3 className="text-sm font-medium">职位职责</h3>
+          <ul className="mt-2 space-y-1.5 text-sm leading-6 text-foreground/90">
+            {job.responsibilities.map((item) => (
+              <li key={item}>· {item}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="mt-4">
+          <h3 className="text-sm font-medium">任职要求</h3>
+          <ul className="mt-2 space-y-1.5 text-sm leading-6 text-foreground/90">
+            {job.requirements.map((item) => (
+              <li key={item}>· {item}</li>
+            ))}
+          </ul>
+        </section>
+
+        {job.plus?.length ? (
+          <section className="mt-4">
+            <h3 className="text-sm font-medium">加分项</h3>
+            <p className="mt-2 text-sm leading-6">{job.plus.join(" · ")}</p>
+          </section>
+        ) : null}
+
+        {job.caveat ? (
+          <p className="mt-4 rounded-xl bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {job.caveat}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a
+            href={job.applyUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants())}
+          >
+            打开投递链接
+            <ArrowUpRight />
+          </a>
+          <a
+            href={job.officialSite}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            校招官网
+          </a>
+        </div>
+
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            当前进度
+          </p>
+          <StatusChips value={record.status} onChange={onStatus} />
+          <div className="mt-3 flex flex-wrap gap-3">
+            {FLAGS.map((flag) => (
+              <label
+                key={flag.id}
+                className="inline-flex items-center gap-2 text-xs"
+              >
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-current"
+                  checked={record.flags.includes(flag.id)}
+                  onChange={() => onFlag(flag.id)}
+                />
+                {flag.label}
+              </label>
+            ))}
           </div>
-        </DialogContent>
-      ) : null}
-    </Dialog>
+          <Textarea
+            value={record.note}
+            onChange={(event) => onNote(event.target.value)}
+            placeholder="进度备注"
+            className="mt-3 min-h-16"
+          />
+        </div>
+      </div>
+    </div>
   )
 }
