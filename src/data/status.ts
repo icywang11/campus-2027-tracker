@@ -2,6 +2,7 @@ export const STATUSES = [
   { id: "todo", label: "未投递", hint: "还没动手" },
   { id: "applied", label: "投递中", hint: "已网申 / 等初筛" },
   { id: "assessment", label: "测评中", hint: "在线测评 / AI 面" },
+  { id: "assessed", label: "测评完", hint: "测评已交，等筛选或面试" },
   { id: "written", label: "笔试中", hint: "笔试待完成或待出分" },
   { id: "interview", label: "面试中", hint: "已约面或进行中" },
   { id: "waiting", label: "等结果", hint: "面完等 HC / Offer" },

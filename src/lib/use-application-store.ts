@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react"
 
+import { jobs } from "@/data/jobs"
 import {
   defaultRecord,
   type ApplicationRecord,
@@ -9,7 +10,7 @@ import {
   type StatusId,
 } from "@/data/status"
 
-const STORAGE_KEY = "icywang-2027-campus-tracker"
+const STORAGE_KEY = "icywang-2027-campus-tracker-v2"
 const EMPTY: Record<string, ApplicationRecord> = {}
 
 type Store = Record<string, ApplicationRecord>
@@ -36,8 +37,26 @@ function writeStore(store: Store) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
 }
 
+function withSeeds(stored: Store): Store {
+  const next: Store = { ...stored }
+  for (const job of jobs) {
+    if (!job.seed) continue
+    const current = next[job.id]
+    if (!current || current.status === "todo") {
+      next[job.id] = {
+        status: job.seed.status,
+        flags: job.seed.flags ?? [],
+        note: job.seed.note ?? "",
+        updatedAt: new Date().toISOString(),
+      }
+    }
+  }
+  return Object.keys(next).length ? next : EMPTY
+}
+
 if (typeof window !== "undefined") {
-  memory = readStore()
+  memory = withSeeds(readStore())
+  if (memory !== EMPTY) writeStore(memory)
 }
 
 function subscribe(listener: () => void) {
@@ -98,8 +117,9 @@ export function useApplicationStore() {
   }, [])
 
   const resetAll = useCallback(() => {
-    memory = EMPTY
-    window.localStorage.removeItem(STORAGE_KEY)
+    const seeded = withSeeds({})
+    memory = seeded
+    writeStore(seeded)
     emit()
   }, [])
 
@@ -134,9 +154,14 @@ export function useApplicationStore() {
     return {
       applied: all.filter((item) => item.status === "applied").length,
       inProcess: all.filter((item) =>
-        ["applied", "assessment", "written", "interview", "waiting"].includes(
-          item.status
-        )
+        [
+          "applied",
+          "assessment",
+          "assessed",
+          "written",
+          "interview",
+          "waiting",
+        ].includes(item.status)
       ).length,
       offer: all.filter((item) => item.status === "offer").length,
       closed: all.filter((item) =>
