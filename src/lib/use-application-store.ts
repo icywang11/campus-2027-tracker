@@ -33,8 +33,18 @@ function readStore(): Store {
   }
 }
 
+function knownJobsOnly(store: Store): Store {
+  const known = new Set(jobs.map((job) => job.id))
+  const cleaned: Store = {}
+  for (const [id, rec] of Object.entries(store)) {
+    if (!known.has(id) || !rec || typeof rec !== "object") continue
+    cleaned[id] = rec
+  }
+  return cleaned
+}
+
 function writeStore(store: Store) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(knownJobsOnly(store)))
 }
 
 function withSeeds(stored: Store): Store {
@@ -141,7 +151,7 @@ export function useApplicationStore() {
       try {
         const parsed = JSON.parse(String(reader.result)) as Store
         if (!parsed || typeof parsed !== "object") return
-        persist(parsed)
+        persist(knownJobsOnly(parsed))
       } catch {
         // ignore malformed files
       }

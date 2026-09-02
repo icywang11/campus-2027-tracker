@@ -1,0 +1,28 @@
+{
+  "savedAt": "2026-09-02T14:12:00.000Z",
+  "note": "浏览器里点「导入」选这个文件，可恢复已投进度。也可当备份另存。",
+  "tencent-ieg-ops-trainee": {
+    "status": "assessed",
+    "flags": ["priority"],
+    "note": "刚测评完",
+    "updatedAt": "2026-09-02T14:12:00.000Z"
+  },
+  "alibaba-lingxi-jp-marketing": {
+    "status": "applied",
+    "flags": ["priority"],
+    "note": "已投灵犀日语游戏营销",
+    "updatedAt": "2026-09-02T14:12:00.000Z"
+  },
+  "alibaba-intl-integrated-marketing": {
+    "status": "applied",
+    "flags": [],
+    "note": "已投整合营销-小语种",
+    "updatedAt": "2026-09-02T14:12:00.000Z"
+  },
+  "mihoyo-intl": {
+    "status": "applied",
+    "flags": ["priority"],
+    "note": "已投国际化发行运营",
+    "updatedAt": "2026-09-02T14:12:00.000Z"
+  }
+}
