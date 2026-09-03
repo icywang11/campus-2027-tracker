@@ -1,4 +1,3 @@
-import { extraJobs } from "./jobs-extra"
 import {
   finalizeJob,
   type JobInput,
@@ -9,6 +8,7 @@ export type {
   Direction,
   Industry,
   Job,
+  JobInput,
   JobTag,
   MatchBreakdown,
   MatchLevel,
@@ -798,7 +798,8 @@ const rawJobs: JobInput[] = [
   },
 ]
 
-export const jobs = [...rawJobs, ...extraJobs].map(finalizeJob)
+export const builtinJobs = rawJobs.map(finalizeJob)
+export const jobs = builtinJobs
 
 export const COMPANIES = Array.from(
   new Set(jobs.map((job) => job.companyGroup))

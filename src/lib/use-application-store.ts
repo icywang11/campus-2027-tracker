@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react"
 
-import { jobs } from "@/data/jobs"
+import { builtinJobs } from "@/data/jobs"
 import {
   ACTIVE_STATUSES,
   defaultRecord,
@@ -34,11 +34,14 @@ function readStore(): Store {
   }
 }
 
+function isRecord(value: unknown): value is ApplicationRecord {
+  return !!value && typeof value === "object" && "status" in value
+}
+
 function knownJobsOnly(store: Store): Store {
-  const known = new Set(jobs.map((job) => job.id))
   const cleaned: Store = {}
   for (const [id, rec] of Object.entries(store)) {
-    if (!known.has(id) || !rec || typeof rec !== "object") continue
+    if (!isRecord(rec)) continue
     cleaned[id] = rec
   }
   return cleaned
@@ -50,7 +53,7 @@ function writeStore(store: Store) {
 
 function withSeeds(stored: Store): Store {
   const next: Store = { ...stored }
-  for (const job of jobs) {
+  for (const job of builtinJobs) {
     if (!job.seed) continue
     const current = next[job.id]
     if (!current || current.status === "todo") {
@@ -127,6 +130,12 @@ export function useApplicationStore() {
     })
   }, [])
 
+  const removeRecord = useCallback((jobId: string) => {
+    const next = { ...memory }
+    delete next[jobId]
+    persist(Object.keys(next).length ? next : EMPTY)
+  }, [])
+
   const resetAll = useCallback(() => {
     const seeded = withSeeds({})
     memory = seeded
@@ -150,9 +159,12 @@ export function useApplicationStore() {
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result)) as Store
-        if (!parsed || typeof parsed !== "object") return
-        persist(knownJobsOnly(parsed))
+        const parsed = JSON.parse(String(reader.result)) as Store & {
+          progress?: Store
+        }
+        const source = parsed.progress ?? parsed
+        if (!source || typeof source !== "object") return
+        persist(knownJobsOnly(source))
       } catch {
         // ignore malformed files
       }
@@ -181,6 +193,7 @@ export function useApplicationStore() {
     setStatus,
     toggleFlag,
     setNote,
+    removeRecord,
     resetAll,
     exportJson,
     importJson,

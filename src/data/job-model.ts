@@ -87,6 +87,7 @@ export type Job = {
   caveat?: string
   postedAt?: string
   lastChecked: string
+  custom?: boolean
   seed?: {
     status: StatusId
     note?: string

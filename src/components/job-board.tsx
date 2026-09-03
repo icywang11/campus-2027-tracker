@@ -6,32 +6,27 @@ import {
   ChevronRight,
   Download,
   Filter,
+  Plus,
   RotateCcw,
   Search,
   Upload,
 } from "lucide-react"
 
+import { JobForm } from "@/components/job-form"
 import { JobDetailPanel, statusLabel, statusTone } from "@/components/job-detail-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { profile } from "@/data/profile"
 import {
-  COMPANIES,
   DIRECTIONS,
   INDUSTRIES,
-  LOCATIONS,
+  inferCompanyGroup,
   isUrgent,
-  jobs,
   matchStars,
   type Direction,
   type Industry,
   type Job,
+  type JobInput,
 } from "@/data/jobs"
 import {
   ACTIVE_STATUSES,
@@ -40,6 +35,10 @@ import {
   type StatusId,
 } from "@/data/status"
 import { useApplicationStore } from "@/lib/use-application-store"
+import {
+  newUserJobId,
+  useJobCatalog,
+} from "@/lib/use-job-catalog"
 import { cn } from "@/lib/utils"
 
 type StatusFilter = StatusId | "all" | "active" | "prep"
@@ -103,7 +102,24 @@ function StatCard({
 
 export function JobBoard() {
   const store = useApplicationStore()
+  const catalog = useJobCatalog()
+  const jobs = catalog.jobs
+  const companies = useMemo(
+    () =>
+      Array.from(new Set(jobs.map((job) => job.companyGroup))).sort((a, b) =>
+        a.localeCompare(b, "zh")
+      ),
+    [jobs]
+  )
+  const locations = useMemo(
+    () =>
+      Array.from(new Set(jobs.flatMap((job) => job.locations))).sort((a, b) =>
+        a.localeCompare(b, "zh")
+      ),
+    [jobs]
+  )
   const fileRef = useRef<HTMLInputElement>(null)
+  const detailRef = useRef<HTMLElement>(null)
   const [query, setQuery] = useState("")
   const [company, setCompany] = useState("all")
   const [industry, setIndustry] = useState<Industry | "all">("all")
@@ -116,7 +132,8 @@ export function JobBoard() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [formMode, setFormMode] = useState<"closed" | "create" | "edit">("closed")
+  const [formId, setFormId] = useState(newUserJobId())
 
   const filtered = useMemo(() => {
     const rank = (job: Job) => {
@@ -171,6 +188,7 @@ export function JobBoard() {
     company,
     direction,
     industry,
+    jobs,
     location,
     matchFloor,
     onlyDirect,
@@ -251,9 +269,75 @@ export function JobBoard() {
     if (store.get(id).status === "todo") {
       store.setStatus(id, "viewed")
     }
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      setMobileOpen(true)
+    setFormMode("closed")
+    window.setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 50)
+  }
+
+  function startCreate() {
+    const id = newUserJobId()
+    setFormId(id)
+    setFormMode("create")
+    window.setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 50)
+  }
+
+  function saveJob(input: JobInput) {
+    catalog.upsert(input)
+    setSelectedId(input.id)
+    setFormMode("closed")
+    setExpanded((current) => new Set(current).add(inferCompanyGroup(input.company)))
+  }
+
+  function deleteJob(id: string) {
+    if (!window.confirm("从目录里拿掉这条？已投进度也会一起删。")) return
+    catalog.remove(id)
+    store.removeRecord(id)
+    if (selectedId === id) setSelectedId(null)
+    setFormMode("closed")
+  }
+
+  function exportAll() {
+    const payload = {
+      savedAt: new Date().toISOString(),
+      progress: store.store,
+      userJobs: catalog.userJobs,
+      hiddenIds: catalog.hiddenIds,
     }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = "2027-campus-tracker.json"
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function importAll(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as {
+          progress?: Record<string, ApplicationRecord>
+          userJobs?: JobInput[]
+          hiddenIds?: string[]
+        } & Record<string, unknown>
+        if (parsed.userJobs || parsed.hiddenIds) {
+          catalog.importBackup({
+            userJobs: parsed.userJobs,
+            hiddenIds: parsed.hiddenIds,
+          })
+        }
+        store.importJson(file)
+      } catch {
+        store.importJson(file)
+      }
+    }
+    reader.readAsText(file)
   }
 
   const readyCount = jobs.filter((job) =>
@@ -273,10 +357,14 @@ export function JobBoard() {
                 {profile.name}的投递管理
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-                按公司看岗，先改简历再投。有独立 JD 的才能「立即投递」；其余去官网搜岗位名。
+                自己加岗位、把 JD 链接贴进来。细则可以先空着，你把链接发我之后我再帮你补。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={startCreate}>
+                <Plus />
+                添加岗位
+              </Button>
               <a
                 href={profile.portfolio}
                 target="_blank"
@@ -285,9 +373,9 @@ export function JobBoard() {
               >
                 个人主页
               </a>
-              <Button variant="outline" size="sm" onClick={store.exportJson}>
+              <Button variant="outline" size="sm" onClick={exportAll}>
                 <Download />
-                导出进度
+                导出
               </Button>
               <Button
                 variant="outline"
@@ -316,7 +404,7 @@ export function JobBoard() {
                 className="hidden"
                 onChange={(event) => {
                   const file = event.target.files?.[0]
-                  if (file) store.importJson(file)
+                  if (file) importAll(file)
                   event.target.value = ""
                 }}
               />
@@ -327,7 +415,7 @@ export function JobBoard() {
             <StatCard
               label="岗位池"
               value={jobs.length}
-              hint={`${COMPANIES.length} 家公司 · ${filtered.length} 条在筛`}
+              hint={`${companies.length} 家公司 · ${filtered.length} 条在筛`}
             />
             <StatCard
               label="待处理"
@@ -363,7 +451,7 @@ export function JobBoard() {
                 onChange={setCompany}
                 options={[
                   { value: "all", label: "全部公司" },
-                  ...COMPANIES.map((item) => ({ value: item, label: item })),
+                  ...companies.map((item) => ({ value: item, label: item })),
                 ]}
               />
               <FilterSelect
@@ -372,7 +460,7 @@ export function JobBoard() {
                 onChange={setLocation}
                 options={[
                   { value: "all", label: "全部地点" },
-                  ...LOCATIONS.map((item) => ({ value: item, label: item })),
+                  ...locations.map((item) => ({ value: item, label: item })),
                 ]}
               />
               <FilterSelect
@@ -449,14 +537,18 @@ export function JobBoard() {
 
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]">
           <div className="overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 公司目录
               </p>
+              <Button size="xs" variant="outline" onClick={startCreate}>
+                <Plus />
+                添加
+              </Button>
             </div>
             {groups.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-                没有符合筛选的岗位
+                没有符合筛选的岗位。点「添加岗位」把链接贴进来。
               </p>
             ) : (
               <ul>
@@ -508,44 +600,39 @@ export function JobBoard() {
             )}
           </div>
 
-          <section className="hidden min-h-80 rounded-2xl border border-border bg-card p-4 sm:p-5 lg:block">
-            {selected && selectedRecord ? (
+          <section
+            ref={detailRef}
+            className="min-h-80 rounded-2xl border border-border bg-card p-4 sm:p-5 lg:sticky lg:top-4"
+          >
+            {formMode !== "closed" ? (
+              <JobForm
+                key={formId}
+                jobId={formId}
+                initial={formMode === "edit" ? jobs.find((job) => job.id === formId) : undefined}
+                onSave={saveJob}
+                onCancel={() => setFormMode("closed")}
+              />
+            ) : selected && selectedRecord ? (
               <JobDetailPanel
                 job={selected}
                 record={selectedRecord}
                 onStatus={(status) => store.setStatus(selected.id, status)}
                 onFlag={(flag) => store.toggleFlag(selected.id, flag)}
                 onNote={(note) => store.setNote(selected.id, note)}
+                onEdit={() => {
+                  setFormId(selected.id)
+                  setFormMode("edit")
+                }}
+                onDelete={() => deleteJob(selected.id)}
               />
             ) : (
               <p className="py-16 text-center text-sm text-muted-foreground">
-                展开公司，点一个岗位看匹配度和改简历建议。
+                点「添加岗位」把 JD 链接贴进来，或从左边选一条已有岗位。
               </p>
             )}
           </section>
         </div>
       </main>
-
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-          {selected && selectedRecord ? (
-            <>
-              <SheetHeader>
-                <SheetTitle>{selected.role}</SheetTitle>
-              </SheetHeader>
-              <div className="px-4 pb-8">
-                <JobDetailPanel
-                  job={selected}
-                  record={selectedRecord}
-                  onStatus={(status) => store.setStatus(selected.id, status)}
-                  onFlag={(flag) => store.toggleFlag(selected.id, flag)}
-                  onNote={(note) => store.setNote(selected.id, note)}
-                />
-              </div>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
     </div>
   )
 }

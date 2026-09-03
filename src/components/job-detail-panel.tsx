@@ -179,13 +179,22 @@ export function JobDetailPanel({
   onStatus,
   onFlag,
   onNote,
+  onEdit,
+  onDelete,
 }: {
   job: Job
   record: ApplicationRecord
   onStatus: (status: StatusId) => void
   onFlag: (flag: FlagId) => void
   onNote: (note: string) => void
+  onEdit?: () => void
+  onDelete?: () => void
 }) {
+  const draft =
+    job.custom === true ||
+    job.batch === "手动添加" ||
+    job.responsibilities.includes("待补充")
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -199,7 +208,29 @@ export function JobDetailPanel({
             {job.locations.join(" / ")} · {job.track}
           </p>
         </div>
-        <ApplyButtons job={job} />
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <ApplyButtons job={job} />
+          <div className="flex flex-wrap gap-2">
+            {onEdit ? (
+              <button
+                type="button"
+                onClick={onEdit}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              >
+                编辑
+              </button>
+            ) : null}
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+              >
+                从目录移除
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -218,6 +249,7 @@ export function JobDetailPanel({
             {tag}
           </Badge>
         ))}
+        {draft ? <Badge variant="secondary">待补 JD</Badge> : null}
         {job.applyKind === "direct" ? (
           <Badge>可直接投递</Badge>
         ) : (
@@ -257,6 +289,16 @@ export function JobDetailPanel({
         />
       </section>
 
+      {draft ? (
+        <section className="rounded-xl border border-dashed border-orange-300/80 bg-orange-50/50 p-4">
+          <h3 className="text-sm font-semibold text-orange-950">岗位细则待补</h3>
+          <p className="mt-2 text-sm leading-6 text-orange-950/80">
+            链接已经记下。职责、匹配度、投递前改简历建议还没写。你把这份 JD
+            的页面或正文发给我之后，我再帮你补具体内容。
+          </p>
+        </section>
+      ) : (
+        <>
       <section className="rounded-xl border border-orange-300/80 bg-orange-50/60 p-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-orange-950">
           <AlertTriangle className="size-4 text-orange-700" />
@@ -364,6 +406,8 @@ export function JobDetailPanel({
           ) : null}
         </div>
       </details>
+        </>
+      )}
 
       {job.caveat ? (
         <p className="rounded-xl bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
