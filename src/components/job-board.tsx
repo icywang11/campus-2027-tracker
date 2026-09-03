@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import {
   ChevronDown,
   ChevronRight,
+  ClipboardCopy,
   Download,
   Filter,
   Plus,
@@ -21,6 +22,7 @@ import {
   DIRECTIONS,
   INDUSTRIES,
   inferCompanyGroup,
+  isPendingDetails,
   isUrgent,
   matchStars,
   type Direction,
@@ -132,6 +134,7 @@ export function JobBoard() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [copied, setCopied] = useState(false)
   const [formMode, setFormMode] = useState<"closed" | "create" | "edit">("closed")
   const [formId, setFormId] = useState(newUserJobId())
 
@@ -173,7 +176,12 @@ export function JobBoard() {
           record.status !== statusFilter
         )
           return false
-        if (matchFloor !== "all" && job.matchScore < Number(matchFloor)) return false
+        if (
+          matchFloor !== "all" &&
+          !isPendingDetails(job) &&
+          job.matchScore < Number(matchFloor)
+        )
+          return false
         if (onlyDirect && job.applyKind !== "direct") return false
         if (onlyPriority && !record.flags.includes("priority")) return false
         return true
@@ -299,6 +307,16 @@ export function JobBoard() {
     setFormMode("closed")
   }
 
+  function copyJobList() {
+    const text = jobs
+      .map((job) => `- ${job.company}｜${job.role}｜${job.applyUrl}`)
+      .join("\n")
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    })
+  }
+
   function exportAll() {
     const payload = {
       savedAt: new Date().toISOString(),
@@ -343,6 +361,10 @@ export function JobBoard() {
   const readyCount = jobs.filter((job) =>
     ["todo", "viewed", "ready"].includes(store.get(job.id).status)
   ).length
+  const inProcessCount = jobs.filter((job) =>
+    ACTIVE_STATUSES.includes(store.get(job.id).status)
+  ).length
+  const offerCount = jobs.filter((job) => store.get(job.id).status === "offer").length
 
   return (
     <div className="min-h-full bg-background">
@@ -357,7 +379,7 @@ export function JobBoard() {
                 {profile.name}的投递管理
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-                自己加岗位、把 JD 链接贴进来。细则可以先空着，你把链接发我之后我再帮你补。
+                点「添加岗位」，把公司、岗位名和 JD 链接贴进来就能进目录。细则先空着也行；你把链接发我之后，我再按岗位补匹配度和改简历建议。已投的腾讯、灵犀、阿里国际、米哈游还留着。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -373,6 +395,10 @@ export function JobBoard() {
               >
                 个人主页
               </a>
+              <Button variant="outline" size="sm" onClick={copyJobList}>
+                <ClipboardCopy />
+                {copied ? "已复制" : "复制岗位清单"}
+              </Button>
               <Button variant="outline" size="sm" onClick={exportAll}>
                 <Download />
                 导出
@@ -424,10 +450,10 @@ export function JobBoard() {
             />
             <StatCard
               label="进行中"
-              value={store.counts.inProcess}
+              value={inProcessCount}
               hint="已投到等结果"
             />
-            <StatCard label="Offer" value={store.counts.offer} hint="意向书也算" />
+            <StatCard label="Offer" value={offerCount} hint="意向书也算" />
           </div>
         </div>
       </header>
@@ -539,7 +565,7 @@ export function JobBoard() {
           <div className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                公司目录
+                我的岗位
               </p>
               <Button size="xs" variant="outline" onClick={startCreate}>
                 <Plus />
@@ -548,7 +574,7 @@ export function JobBoard() {
             </div>
             {groups.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-                没有符合筛选的岗位。点「添加岗位」把链接贴进来。
+                还没有符合筛选的岗位。点右上角「添加岗位」，把 JD 链接贴进来。
               </p>
             ) : (
               <ul>
@@ -572,9 +598,13 @@ export function JobBoard() {
                         <span className="text-[11px] text-muted-foreground">
                           {group.jobs.length} 岗
                         </span>
-                        <span className="font-heading text-xs tabular-nums">
-                          {group.maxScore}%
-                        </span>
+                        {group.jobs.every((job) => isPendingDetails(job)) ? (
+                          <span className="text-[11px] text-muted-foreground">待补</span>
+                        ) : (
+                          <span className="font-heading text-xs tabular-nums">
+                            {group.maxScore}%
+                          </span>
+                        )}
                         {group.activeCount > 0 ? (
                           <Badge variant="secondary">{group.activeCount} 进行中</Badge>
                         ) : null}
@@ -627,7 +657,7 @@ export function JobBoard() {
               />
             ) : (
               <p className="py-16 text-center text-sm text-muted-foreground">
-                点「添加岗位」把 JD 链接贴进来，或从左边选一条已有岗位。
+                点「添加岗位」把 JD 链接贴进来。已投的四条在左边，新岗位会跟它们排在一起。
               </p>
             )}
           </section>
@@ -672,9 +702,15 @@ function JobRow({
           >
             {statusLabel(record.status)}
           </span>
-          <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] tabular-nums">
-            {matchStars(job.matchScore)} {job.matchScore}%
-          </span>
+          {isPendingDetails(job) ? (
+            <span className="rounded-full border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-900">
+              待补细则
+            </span>
+          ) : (
+            <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] tabular-nums">
+              {matchStars(job.matchScore)} {job.matchScore}%
+            </span>
+          )}
           {job.tags.includes("日本") ? (
             <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px]">
               日本

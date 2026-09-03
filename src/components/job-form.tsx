@@ -3,7 +3,15 @@
 import { useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
-import { INDUSTRIES, JOB_TAGS, type Industry, type Job, type JobInput, type JobTag, type Track } from "@/data/job-model"
+import {
+  INDUSTRIES,
+  JOB_TAGS,
+  type Industry,
+  type Job,
+  type JobInput,
+  type JobTag,
+  type Track,
+} from "@/data/job-model"
 
 const TRACKS: Track[] = ["正式校招", "校招储备实习", "管培 / 专项"]
 
@@ -42,9 +50,14 @@ export function jobToForm(job?: Job): {
     industry: job?.industry ?? "游戏",
     track: job?.track ?? "正式校招",
     tags: job?.tags ?? [],
-    responsibilities: job?.responsibilities.filter((item) => item !== "待补充").join("\n") ?? "",
-    requirements: job?.requirements.filter((item) => item !== "待补充").join("\n") ?? "",
-    note: job?.matchReasons[0] && !job.matchReasons[0].includes("手动添加") ? job.matchReasons.join("\n") : "",
+    responsibilities:
+      job?.responsibilities.filter((item) => item !== "待补充").join("\n") ?? "",
+    requirements:
+      job?.requirements.filter((item) => item !== "待补充").join("\n") ?? "",
+    note:
+      job?.matchReasons[0] && !job.matchReasons[0].includes("手动添加")
+        ? job.matchReasons.join("\n")
+        : "",
   }
 }
 
@@ -97,6 +110,7 @@ export function JobForm({
     const duty = lines(responsibilities)
     const req = lines(requirements)
     const notes = lines(note)
+    const pendingDetails = duty.length === 0 && req.length === 0
     onSave({
       id: jobId,
       company: company.trim(),
@@ -110,10 +124,11 @@ export function JobForm({
       jdUrl: url,
       tags,
       custom: true,
-      match: "high",
+      pendingDetails,
+      match: "medium",
       matchReasons: notes.length
         ? notes
-        : ["你手动添加的岗位。链接已保存，岗位细则可以之后再补。"],
+        : ["链接已保存。岗位细则、匹配度和改简历建议等你发给我之后再补。"],
       responsibilities: duty.length ? duty : ["待补充"],
       requirements: req.length ? req : ["待补充"],
       batch: "手动添加",
@@ -124,8 +139,8 @@ export function JobForm({
     <form onSubmit={submit} className="space-y-4">
       <div>
         <h2 className="font-heading text-2xl">{initial ? "编辑岗位" : "添加岗位"}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          先填公司和链接就行。职责、要求可以以后再贴；你把 JD 发给我之后，我再帮你补匹配度和改简历建议。
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          只要公司、岗位名和链接。职责和要求可以空着；你把链接发我之后，我再帮你补匹配度和投递前改简历建议。
         </p>
       </div>
 
@@ -136,6 +151,7 @@ export function JobForm({
           onChange={(event) => setCompany(event.target.value)}
           className={`${fieldClass} mt-1`}
           placeholder="例如：库洛游戏"
+          autoComplete="organization"
         />
       </label>
       <label className="block text-sm">
@@ -154,10 +170,11 @@ export function JobForm({
           onChange={(event) => setApplyUrl(event.target.value)}
           className={`${fieldClass} mt-1`}
           placeholder="把官网职位详情页链接贴在这里"
+          inputMode="url"
         />
       </label>
       <label className="block text-sm">
-        地点
+        地点（选填）
         <input
           value={locations}
           onChange={(event) => setLocations(event.target.value)}
@@ -165,91 +182,96 @@ export function JobForm({
           placeholder="上海 / 广州，用 / 分隔"
         />
       </label>
-      <label className="block text-sm">
-        校招官网（选填）
-        <input
-          value={officialSite}
-          onChange={(event) => setOfficialSite(event.target.value)}
-          className={`${fieldClass} mt-1`}
-          placeholder="不填就用上面的岗位链接"
-        />
-      </label>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          行业
-          <select
-            value={industry}
-            onChange={(event) => setIndustry(event.target.value as Industry)}
-            className={`${fieldClass} mt-1`}
-          >
-            {INDUSTRIES.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          类型
-          <select
-            value={track}
-            onChange={(event) => setTrack(event.target.value as Track)}
-            className={`${fieldClass} mt-1`}
-          >
-            {TRACKS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <fieldset>
-        <legend className="text-sm">方向（可多选）</legend>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {JOB_TAGS.map((tag) => (
-            <label key={tag} className="inline-flex items-center gap-1.5 text-xs">
-              <input
-                type="checkbox"
-                className="size-3.5 accent-current"
-                checked={tags.includes(tag)}
-                onChange={() => toggleTag(tag)}
-              />
-              {tag}
+      <details className="rounded-xl border border-border bg-muted/20 px-3 py-2">
+        <summary className="cursor-pointer text-sm font-medium">
+          更多信息（都可先空着）
+        </summary>
+        <div className="mt-3 space-y-4 pb-2">
+          <label className="block text-sm">
+            校招官网
+            <input
+              value={officialSite}
+              onChange={(event) => setOfficialSite(event.target.value)}
+              className={`${fieldClass} mt-1`}
+              placeholder="不填就用上面的岗位链接"
+            />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              行业
+              <select
+                value={industry}
+                onChange={(event) => setIndustry(event.target.value as Industry)}
+                className={`${fieldClass} mt-1`}
+              >
+                {INDUSTRIES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
             </label>
-          ))}
+            <label className="block text-sm">
+              类型
+              <select
+                value={track}
+                onChange={(event) => setTrack(event.target.value as Track)}
+                className={`${fieldClass} mt-1`}
+              >
+                {TRACKS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <fieldset>
+            <legend className="text-sm">方向（可多选）</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {JOB_TAGS.map((tag) => (
+                <label key={tag} className="inline-flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-current"
+                    checked={tags.includes(tag)}
+                    onChange={() => toggleTag(tag)}
+                  />
+                  {tag}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="block text-sm">
+            职责（一行一条）
+            <textarea
+              value={responsibilities}
+              onChange={(event) => setResponsibilities(event.target.value)}
+              className={`${areaClass} mt-1`}
+              placeholder="暂时空着也没关系"
+            />
+          </label>
+          <label className="block text-sm">
+            任职要求（一行一条）
+            <textarea
+              value={requirements}
+              onChange={(event) => setRequirements(event.target.value)}
+              className={`${areaClass} mt-1`}
+              placeholder="暂时空着也没关系"
+            />
+          </label>
+          <label className="block text-sm">
+            自己的备注
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              className={`${areaClass} mt-1`}
+              placeholder="比如：内推码、为什么想投、截止时间"
+            />
+          </label>
         </div>
-      </fieldset>
-
-      <label className="block text-sm">
-        职责（选填，一行一条）
-        <textarea
-          value={responsibilities}
-          onChange={(event) => setResponsibilities(event.target.value)}
-          className={`${areaClass} mt-1`}
-          placeholder="暂时空着也没关系"
-        />
-      </label>
-      <label className="block text-sm">
-        任职要求（选填，一行一条）
-        <textarea
-          value={requirements}
-          onChange={(event) => setRequirements(event.target.value)}
-          className={`${areaClass} mt-1`}
-          placeholder="暂时空着也没关系"
-        />
-      </label>
-      <label className="block text-sm">
-        自己的备注（选填）
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          className={`${areaClass} mt-1`}
-          placeholder="比如：内推码、为什么想投、截止时间"
-        />
-      </label>
+      </details>
 
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
 

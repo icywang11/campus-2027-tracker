@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  isPendingDetails,
   isUrgent,
   matchStars,
   type Job,
@@ -190,10 +191,7 @@ export function JobDetailPanel({
   onEdit?: () => void
   onDelete?: () => void
 }) {
-  const draft =
-    job.custom === true ||
-    job.batch === "手动添加" ||
-    job.responsibilities.includes("待补充")
+  const draft = isPendingDetails(job)
 
   return (
     <div className="space-y-6">
@@ -234,22 +232,27 @@ export function JobDetailPanel({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-heading text-lg tabular-nums">
-          {matchStars(job.matchScore)} {job.matchScore}%
-        </span>
-        {isUrgent(job) ? (
-          <Badge className="border-orange-200 bg-orange-100 text-orange-950">
-            高匹配
-          </Badge>
+        {draft ? (
+          <Badge variant="secondary">待补 JD</Badge>
         ) : (
-          <Badge variant="outline">{job.match === "high" ? "较匹配" : "可投备选"}</Badge>
+          <>
+            <span className="font-heading text-lg tabular-nums">
+              {matchStars(job.matchScore)} {job.matchScore}%
+            </span>
+            {isUrgent(job) ? (
+              <Badge className="border-orange-200 bg-orange-100 text-orange-950">
+                高匹配
+              </Badge>
+            ) : (
+              <Badge variant="outline">{job.match === "high" ? "较匹配" : "可投备选"}</Badge>
+            )}
+          </>
         )}
         {job.tags.slice(0, 6).map((tag) => (
           <Badge key={tag} variant="outline">
             {tag}
           </Badge>
         ))}
-        {draft ? <Badge variant="secondary">待补 JD</Badge> : null}
         {job.applyKind === "direct" ? (
           <Badge>可直接投递</Badge>
         ) : (
@@ -294,7 +297,7 @@ export function JobDetailPanel({
           <h3 className="text-sm font-semibold text-orange-950">岗位细则待补</h3>
           <p className="mt-2 text-sm leading-6 text-orange-950/80">
             链接已经记下。职责、匹配度、投递前改简历建议还没写。你把这份 JD
-            的页面或正文发给我之后，我再帮你补具体内容。
+            的页面链接发我（或点「复制岗位清单」贴进下一条消息），我再帮你补具体内容。
           </p>
         </section>
       ) : (

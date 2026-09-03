@@ -88,6 +88,7 @@ export type Job = {
   postedAt?: string
   lastChecked: string
   custom?: boolean
+  pendingDetails?: boolean
   seed?: {
     status: StatusId
     note?: string
@@ -289,20 +290,53 @@ function inferHighlights(input: JobInput, tags: JobTag[]): string[] {
   return items.slice(0, 5)
 }
 
+export function isPendingDetails(
+  job: Pick<Job, "pendingDetails" | "custom" | "responsibilities" | "batch">
+) {
+  if (job.pendingDetails === true) return true
+  if (job.pendingDetails === false) return false
+  return (
+    job.custom === true ||
+    job.batch === "手动添加" ||
+    job.responsibilities.includes("待补充")
+  )
+}
+
 export function finalizeJob(input: JobInput): Job {
   const tags = input.tags?.length ? input.tags : inferTags(input)
   const applyKind = inferApplyKind(input)
-  const breakdownBase = inferBreakdown(input, tags)
-  const matchBreakdown: MatchBreakdown = {
-    industry: input.matchBreakdown?.industry ?? breakdownBase.industry,
-    direction: input.matchBreakdown?.direction ?? breakdownBase.direction,
-    japanese: input.matchBreakdown?.japanese ?? breakdownBase.japanese,
-    overseas: input.matchBreakdown?.overseas ?? breakdownBase.overseas,
-    community: input.matchBreakdown?.community ?? breakdownBase.community,
-    location: input.matchBreakdown?.location ?? breakdownBase.location,
+  const pendingDetails =
+    input.pendingDetails ??
+    (input.custom === true &&
+      (!input.responsibilities?.length ||
+        input.responsibilities.every((item) => item === "待补充")))
+  const emptyBreakdown: MatchBreakdown = {
+    industry: 0,
+    direction: 0,
+    japanese: 0,
+    overseas: 0,
+    community: 0,
+    location: 0,
   }
-  const matchScore = input.matchScore ?? scoreFromBreakdown(matchBreakdown)
-  const resumeBase = inferResumeChanges(input, tags)
+  const breakdownBase = pendingDetails
+    ? emptyBreakdown
+    : inferBreakdown(input, tags)
+  const matchBreakdown: MatchBreakdown = pendingDetails
+    ? emptyBreakdown
+    : {
+        industry: input.matchBreakdown?.industry ?? breakdownBase.industry,
+        direction: input.matchBreakdown?.direction ?? breakdownBase.direction,
+        japanese: input.matchBreakdown?.japanese ?? breakdownBase.japanese,
+        overseas: input.matchBreakdown?.overseas ?? breakdownBase.overseas,
+        community: input.matchBreakdown?.community ?? breakdownBase.community,
+        location: input.matchBreakdown?.location ?? breakdownBase.location,
+      }
+  const matchScore = pendingDetails
+    ? (input.matchScore ?? 0)
+    : (input.matchScore ?? scoreFromBreakdown(matchBreakdown))
+  const resumeBase = pendingDetails
+    ? { must: [], should: [], keep: [] }
+    : inferResumeChanges(input, tags)
   const applyUrlIsDetail = applyKind === "direct"
 
   return {
@@ -310,11 +344,12 @@ export function finalizeJob(input: JobInput): Job {
     companyGroup: input.companyGroup ?? inferCompanyGroup(input.company),
     tags,
     applyKind,
+    pendingDetails,
     jdUrl: input.jdUrl ?? (applyUrlIsDetail ? input.applyUrl : undefined),
     matchBreakdown,
     matchScore,
-    match: matchScore >= 80 ? "high" : "medium",
-    highlights: input.highlights ?? inferHighlights(input, tags),
+    match: pendingDetails ? "medium" : matchScore >= 80 ? "high" : "medium",
+    highlights: pendingDetails ? [] : (input.highlights ?? inferHighlights(input, tags)),
     resumeChanges: {
       must: input.resumeChanges?.must ?? resumeBase.must,
       should: input.resumeChanges?.should ?? resumeBase.should,
@@ -333,5 +368,5 @@ export function matchStars(score: number) {
 }
 
 export function isUrgent(job: Job) {
-  return job.matchScore >= 88 && job.applyKind !== "closed"
+  return !isPendingDetails(job) && job.matchScore >= 88 && job.applyKind !== "closed"
 }
